@@ -1,8 +1,4 @@
-"""
-Kinesthetic teaching: teleoperate and save named joint positions.
-SPACE = save current pose with a label.
-Output: poses.json
-"""
+
 import sys, json, time
 import numpy as np
 from pathlib import Path

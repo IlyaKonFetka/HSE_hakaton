@@ -1,11 +1,3 @@
-"""
-Full pick-and-place pipeline:
-  1. YOLO detects cube on CAM1
-  2. Similar-triangles → (X, Y) in robot frame
-  3. IK adjusts above_pick / pick to actual cube position
-  4. Executes: home → above_pick → pick → close → above_pick → above_place → place → open → home
-SPACE = start, Q = quit
-"""
 import sys, json, time, cv2
 import numpy as np
 from pathlib import Path
@@ -15,28 +7,28 @@ from ultralytics import YOLOWorld
 from so101_kinematics import forward_kinematics_deg, inverse_kinematics_deg, JOINT_LIMITS_RAD
 from robot_controller import SO101Controller
 
-# ── Config ────────────────────────────────────────────────────────────────────
+
 CAM1_INDEX  = 0
 CAM2_INDEX  = 2
 CAM_BACKEND = 700
-K1     = 27.5    # CAM1: h_px * D_near_face
-K2     = 27.72   # CAM2: h_px * D_near_face
+K1     = 27.5
+K2     = 27.72
 F_PX   = 620.0
 CX     = 320.0
-CAM1_X = 0.50    # CAM1 is 50cm from robot in X
-CAM2_Y = 0.35    # CAM2 is 35cm from robot center in Y
+CAM1_X = 0.50
+CAM2_Y = 0.35
 
 POSES_FILE = Path(__file__).parent / "poses.json"
 MOTORS = ["shoulder_pan","shoulder_lift","elbow_flex","wrist_flex","wrist_roll"]
 
-# ── Load poses ────────────────────────────────────────────────────────────────
+
 poses = json.loads(POSES_FILE.read_text())
 def joints(name):
     return np.array(poses[name][:5], dtype=float)
 def gripper(name):
     return float(poses[name][5])
 
-# ── Cube detection ────────────────────────────────────────────────────────────
+
 def detect_best(model, frame):
     res = model.predict(frame, conf=0.05, verbose=False)
     boxes = res[0].boxes
@@ -56,7 +48,7 @@ def detect_cube(model, f1, f2):
         bbox1 = det1
         h_px = y2 - y1
         D1   = K1 / h_px
-        X    = CAM1_X - D1          # CAM1 -> X only
+        X    = CAM1_X - D1
 
     det2 = detect_best(model, f2)
     if det2:
@@ -64,13 +56,13 @@ def detect_cube(model, f1, f2):
         bbox2 = det2
         h_px = y2 - y1
         D2   = K2 / h_px
-        Y    = CAM2_Y - D2          # CAM2 -> Y only
+        Y    = CAM2_Y - D2
 
     if X is None or Y is None:
         return None
     return X, Y, bbox1, bbox2
 
-# ── IK with multi-start ───────────────────────────────────────────────────────
+
 def solve_ik(target, hint_deg):
     best_j, best_e = None, np.inf
     for guess in [hint_deg] + [
@@ -84,25 +76,25 @@ def solve_ik(target, hint_deg):
             break
     return best_j, best_e
 
-# ── Pick-and-place sequence ───────────────────────────────────────────────────
+
 def pick_and_place(ctrl, cube_x, cube_y):
     print(f"\n=== Pick-and-place: cube at X={cube_x:.3f} Y={cube_y:.3f} ===")
 
-    # Offset 3cm radially outward from robot origin
+
     r = np.sqrt(cube_x**2 + cube_y**2)
     if r > 0.001:
         cube_x = cube_x - 0.03 * cube_x / r
         cube_y = cube_y - 0.03 * cube_y / r
         print(f"  Offset target: X={cube_x:.3f} Y={cube_y:.3f}")
 
-    # Get Z heights from taught positions via FK
+
     pick_fk,  _ = forward_kinematics_deg(joints("pick"))
     above_fk, _ = forward_kinematics_deg(joints("above_pick"))
-    pick_z  = float(pick_fk[2]) - 0.048  # grab 4.5cm lower
-    above_z = float(above_fk[2]) + 0.05  # 5cm higher approach point
+    pick_z  = float(pick_fk[2]) - 0.048
+    above_z = float(above_fk[2]) + 0.05
     print(f"  Pick Z={pick_z:.3f}  Above Z={above_z:.3f}")
 
-    # Solve IK for actual cube position
+
     target_pick  = np.array([cube_x, cube_y, pick_z])
     target_above = np.array([cube_x, cube_y, above_z])
 
@@ -110,32 +102,32 @@ def pick_and_place(ctrl, cube_x, cube_y):
     j_above, e_above = solve_ik(target_above, joints("above_pick"))
     print(f"  IK pick err={e_pick*1000:.1f}mm  above err={e_above*1000:.1f}mm")
 
-    # Fall back to taught positions if IK is bad
+
     if e_pick > 0.020:
-        print("  IK error too large for pick — using taught position")
+        print("  IK error too large for pick вЂ” using taught position")
         j_pick = joints("pick")
     if e_above > 0.020:
-        print("  IK error too large for above_pick — using taught position")
+        print("  IK error too large for above_pick вЂ” using taught position")
         j_above = joints("above_pick")
 
     g_open  = gripper("above_pick")
-    g_close = 10.0  # closed
+    g_close = 10.0
 
-    print("  → home"); ctrl.move_smooth(joints("home"), gripper("home"), duration=2.0)
-    print("  → above pick"); ctrl.move_smooth(j_above, g_open, duration=2.0)
-    print("  → pick (open gripper)"); ctrl.move_smooth(j_pick, g_open, duration=1.5)
-    print("  → close gripper"); ctrl.close_gripper(g_close, duration=0.8)
-    print("  → above pick"); ctrl.move_smooth(j_above, g_close, duration=1.5)
-    print("  → above place"); ctrl.move_smooth(joints("above_place"), g_close, duration=2.0)
-    print("  → place"); ctrl.move_smooth(joints("place"), g_close, duration=1.5)
-    print("  → open gripper"); ctrl.open_gripper(g_open, duration=0.8)
-    print("  → home"); ctrl.move_smooth(joints("home"), g_open, duration=2.0)
+    print("  home"); ctrl.move_smooth(joints("home"), gripper("home"), duration=2.0)
+    print("  above pick"); ctrl.move_smooth(j_above, g_open, duration=2.0)
+    print("  pick (open gripper)"); ctrl.move_smooth(j_pick, g_open, duration=1.5)
+    print("  close gripper"); ctrl.close_gripper(g_close, duration=0.8)
+    print("  above pick"); ctrl.move_smooth(j_above, g_close, duration=1.5)
+    print("  above place"); ctrl.move_smooth(joints("above_place"), g_close, duration=2.0)
+    print("  place"); ctrl.move_smooth(joints("place"), g_close, duration=1.5)
+    print("  open gripper"); ctrl.open_gripper(g_open, duration=0.8)
+    print("  home"); ctrl.move_smooth(joints("home"), g_open, duration=2.0)
     print("  Done!\n")
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+
 print("Loading YOLO...")
 model = YOLOWorld("yolov8s-worldv2.pt")
-model.set_classes(["cube", "wooden block", "small box"])
+model.set_classes(["cube", "wooden block", "small box", "orange ball", "ball"])
 print("Connecting robot...")
 ctrl = SO101Controller("COM7",
     r"C:\Users\simal\.cache\huggingface\lerobot\calibration\robots\so_follower")
