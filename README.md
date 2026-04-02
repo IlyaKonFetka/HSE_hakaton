@@ -39,12 +39,14 @@ Pick-and-place pipeline для робота SO-101: детекция куба к
    - `git clone https://github.com/huggingface/lerobot.git`
 2. Добавить путь к `lerobot/src` в `PYTHONPATH` (или поправить путь в коде):
    - в `pick_and_place.py` есть явный `sys.path.insert(..., ".../lerobot/src")`
+   - пример пути: `~/projects/lerobot/src` (подставьте ваш реальный путь до клона)
 3. Установить зависимости `lerobot` по их инструкции (из `lerobot`-репозитория), чтобы импорт работал.
 
 Как используется в `pick_and_place.py`:
 
 - через `SO101Controller` вызывается `from lerobot.robots.so_follower...` для подключения к роботу;
-- при создании контроллера передаётся `calibration_dir` (обычно в кэше Hugging Face, например `~/.cache/huggingface/lerobot/calibration/robots/so_follower`);
+- при создании контроллера `calibration_dir` задаётся вручную (в коде сейчас передаётся явный путь);
+- если у вас стандартный кэш Hugging Face, обычно это `~/.cache/huggingface/lerobot/calibration/robots/so_follower`, иначе укажите ваш фактический путь;
 - без доступного `lerobot` и корректной калибровки скрипт не сможет подключиться к роботу.
 
 ## Визуальный серворегулятор (нереализованная идея)
