@@ -29,6 +29,24 @@ Pick-and-place pipeline для робота SO-101: детекция куба к
 
 Скрипты, датасеты и подробности про VLA - в папке `vla_model/` ([README](vla_model/README.md)). Веса модели (~1.7 ГБ) не включены из-за размера.
 
+## Зависимость `lerobot`
+
+Для управления реальным SO-101 нужен `lerobot` (в проекте он используется через `robot_controller.py`).
+
+Установка:
+
+1. Клонировать репозиторий `lerobot`:
+   - `git clone https://github.com/huggingface/lerobot.git`
+2. Добавить путь к `lerobot/src` в `PYTHONPATH` (или поправить путь в коде):
+   - в `pick_and_place.py` есть явный `sys.path.insert(..., ".../lerobot/src")`
+3. Установить зависимости `lerobot` по их инструкции (из `lerobot`-репозитория), чтобы импорт работал.
+
+Как используется в `pick_and_place.py`:
+
+- через `SO101Controller` вызывается `from lerobot.robots.so_follower...` для подключения к роботу;
+- при создании контроллера передаётся `calibration_dir` (обычно в кэше Hugging Face, например `~/.cache/huggingface/lerobot/calibration/robots/so_follower`);
+- без доступного `lerobot` и корректной калибровки скрипт не сможет подключиться к роботу.
+
 ## Визуальный серворегулятор (нереализованная идея)
 
 Думаем что идея гениальная, но придумали под конец.
